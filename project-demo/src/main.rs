@@ -16,8 +16,8 @@ impl PageLoader for StubPageLoader {
 }
 
 fn main() {
-    let mut mmu = Mmu::<65536, 256, _, _>::new(FIFOPageReplacer::new(), StubPageLoader);
-    //let mut mmu = Mmu::<256, 1, _, _>::new(FIFOPageReplacer::new(), StubPageLoader);
+    //let mut mmu = Mmu::<65536, 256, _, _>::new(FIFOPageReplacer::new(), StubPageLoader);
+    let mut mmu = Mmu::<512, 2, 256, _, _>::new(FIFOPageReplacer::new(), StubPageLoader);
 
     dbg!(mmu.read(0xCAFE));
     dbg!(mmu.write(0xCAFE, 0x0));

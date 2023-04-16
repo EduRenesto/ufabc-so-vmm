@@ -2,7 +2,7 @@ use std::{collections::VecDeque, ops::Range};
 
 #[derive(Copy, Clone, Default, Debug)]
 struct PageTableEntry {
-    page_number: usize,
+    frame_index: usize,
     dirty: bool,
 }
 
@@ -17,16 +17,12 @@ impl<const PAGE_TABLE_SIZE: usize> PageTable<PAGE_TABLE_SIZE> {
         }
     }
 
-    fn lookup(&self, page_number: usize) -> Option<usize> {
-        self.table.iter().map(|entry| entry.map(|x| x.page_number)).position(|entry| entry == Some(page_number))
+    fn set(&mut self, page_number: usize, frame_index: usize) {
+        self.table[page_number] = Some(PageTableEntry { frame_index, dirty: false });
     }
 
-    fn set(&mut self, idx: usize, page_number: usize) {
-        self.table[idx] = Some(PageTableEntry { page_number, dirty: false });
-    }
-
-    fn get(&self, idx: usize) -> Option<PageTableEntry> {
-        self.table[idx]
+    fn get(&self, page_number: usize) -> Option<PageTableEntry> {
+        self.table[page_number]
     }
 
     fn mark_dirty(&mut self, idx: usize) {
@@ -34,19 +30,15 @@ impl<const PAGE_TABLE_SIZE: usize> PageTable<PAGE_TABLE_SIZE> {
 
         page.dirty = true;
     }
-
-    fn find_free_entry(&self) -> Option<usize> {
-        self.table.iter().position(|entry| entry.is_none())
-    }
 }
 
-pub enum FrameEvent {
+pub enum PageEvent {
     Touched(usize),
     Loaded(usize),
 }
 
 pub trait PageReplacer {
-    fn frame_event(&mut self, _event: FrameEvent) { }
+    fn page_event(&mut self, _event: PageEvent) { }
 
     fn pick_replacement_page(&mut self) -> usize;
 }
@@ -64,8 +56,8 @@ impl FIFOPageReplacer {
 }
 
 impl PageReplacer for FIFOPageReplacer {
-    fn frame_event(&mut self, event: FrameEvent) {
-        if let FrameEvent::Loaded(idx) = event {
+    fn page_event(&mut self, event: PageEvent) {
+        if let PageEvent::Loaded(idx) = event {
             self.fifo.push_back(idx)
         }
     }
@@ -81,20 +73,30 @@ pub trait PageLoader {
     fn flush_page(&self, page_number: usize, buffer: &[u8]);
 }
 
-pub struct Mmu<const MEM_SIZE: usize, const FRAME_COUNT: usize, REPLACER: PageReplacer, LOADER: PageLoader> {
+pub struct Mmu<
+    const MEM_SIZE: usize,
+    const FRAME_COUNT: usize,
+    const PAGE_COUNT: usize,
+    REPLACER: PageReplacer,
+    LOADER: PageLoader
+> {
     memory: [u8; MEM_SIZE],
-    page_table: PageTable<FRAME_COUNT>,
+    free_frames: VecDeque<usize>,
+    page_table: PageTable<PAGE_COUNT>,
     replacer: REPLACER,
     loader: LOADER,
 }
 
-impl<const MEM_SIZE: usize, const FRAME_COUNT: usize, REPLACER, LOADER> Mmu<MEM_SIZE, FRAME_COUNT, REPLACER, LOADER> where
+impl<const MEM_SIZE: usize, const FRAME_COUNT: usize, const PAGE_COUNT: usize, REPLACER, LOADER> Mmu<MEM_SIZE, FRAME_COUNT, PAGE_COUNT, REPLACER, LOADER> where
     REPLACER: PageReplacer,
     LOADER: PageLoader,
 {
     pub fn new(replacer: REPLACER, loader: LOADER) -> Self {
+        let free_frames = (0..FRAME_COUNT).into_iter().collect();
+
         Mmu {
             memory: [0; MEM_SIZE],
+            free_frames,
             page_table: PageTable::new(),
             replacer,
             loader,
@@ -111,23 +113,27 @@ impl<const MEM_SIZE: usize, const FRAME_COUNT: usize, REPLACER, LOADER> Mmu<MEM_
     }
 
     fn handle_page_fault(&mut self, page_number: usize) -> usize {
-        let frame_idx = match self.page_table.find_free_entry() {
+        let frame_idx = match self.free_frames.pop_front() {
             Some(empty_idx) => empty_idx,
-            None => self.replacer.pick_replacement_page(),
+            None => {
+                let evicted_page_idx = self.replacer.pick_replacement_page();
+
+                let evicted_page = self.page_table.get(evicted_page_idx).unwrap();
+
+                if evicted_page.dirty {
+                    println!("mmu: página {:#06X} suja, salvando antes de sobrescrever", evicted_page_idx);
+
+                    let frame_range = Self::frame_idx_to_range(evicted_page.frame_index);
+                    let frame = &self.memory[frame_range];
+
+                    self.loader.flush_page(evicted_page_idx, frame);
+                }
+
+                evicted_page.frame_index
+            },
         };
 
-        if let Some(page) = self.page_table.get(frame_idx) {
-            if page.dirty {
-                println!("mmu: página {:#06X} suja, salvando antes de sobrescrever", page.page_number);
-
-                let frame_range = Self::frame_idx_to_range(frame_idx);
-                let frame = &self.memory[frame_range];
-
-                self.loader.flush_page(page.page_number, frame);
-            }
-        }
-
-        self.page_table.set(frame_idx, page_number);
+        self.page_table.set(page_number, frame_idx);
 
         let frame_range = Self::frame_idx_to_range(frame_idx);
 
@@ -135,7 +141,7 @@ impl<const MEM_SIZE: usize, const FRAME_COUNT: usize, REPLACER, LOADER> Mmu<MEM_
 
         self.loader.load_page_into(page_number, frame);
 
-        self.replacer.frame_event(FrameEvent::Loaded(frame_idx));
+        self.replacer.page_event(PageEvent::Loaded(page_number));
 
         frame_idx
     }
@@ -148,10 +154,10 @@ impl<const MEM_SIZE: usize, const FRAME_COUNT: usize, REPLACER, LOADER> Mmu<MEM_
 
         println!("mmu: acesso addr {:#06X} page_num={:#02X} page_offset={:#02X}", address, page_number, page_offset);
 
-        let frame_idx = match self.page_table.lookup(page_number) {
-            Some(frame_idx) => {
+        let frame_idx = match self.page_table.get(page_number) {
+            Some(entry) => {
                 println!("mmu: page hit");
-                frame_idx
+                entry.frame_index
             },
             None => {
                 println!("mmu: page fault! tratando...");
@@ -159,9 +165,9 @@ impl<const MEM_SIZE: usize, const FRAME_COUNT: usize, REPLACER, LOADER> Mmu<MEM_
             },
         };
 
-        if mark_dirty { self.page_table.mark_dirty(frame_idx); }
+        if mark_dirty { self.page_table.mark_dirty(page_number); }
 
-        self.replacer.frame_event(FrameEvent::Touched(frame_idx));
+        self.replacer.page_event(PageEvent::Touched(page_number));
 
         let frame_range = Self::frame_idx_to_range(frame_idx);
 
