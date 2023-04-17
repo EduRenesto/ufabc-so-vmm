@@ -6,7 +6,7 @@ pub enum PageEvent {
 }
 
 pub trait PageReplacer {
-    fn page_event(&mut self, _event: PageEvent) { }
+    fn page_event(&mut self, _event: PageEvent) {}
 
     fn pick_replacement_page(&mut self) -> usize;
 }

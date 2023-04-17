@@ -1,19 +1,21 @@
 mod file_page_loader;
 
-use vm::{page_loader::PageLoader, mmu::Mmu, page_replacer::FIFOPageReplacer};
+use vm::{mmu::Mmu, page_loader::PageLoader, page_replacer::FIFOPageReplacer};
 
 struct StubPageLoader;
 
 impl PageLoader for StubPageLoader {
-    fn load_page_into(&mut self, page_loader: usize, target: &mut [u8])
-    {
+    fn load_page_into(&mut self, page_loader: usize, target: &mut [u8]) {
         for i in target {
             *i = (page_loader & 0xF) as u8;
         }
     }
 
     fn flush_page(&mut self, page_number: usize, buffer: &[u8]) {
-        println!("stub_page_loader: write page {:#06X} {:?}", page_number, buffer);
+        println!(
+            "stub_page_loader: write page {:#06X} {:?}",
+            page_number, buffer
+        );
     }
 }
 

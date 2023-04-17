@@ -16,7 +16,10 @@ impl<const PAGE_TABLE_SIZE: usize> PageTable<PAGE_TABLE_SIZE> {
     }
 
     pub fn set(&mut self, page_number: usize, frame_index: usize) {
-        self.table[page_number] = Some(PageTableEntry { frame_index, dirty: false });
+        self.table[page_number] = Some(PageTableEntry {
+            frame_index,
+            dirty: false,
+        });
     }
 
     pub fn get(&self, page_number: usize) -> Option<PageTableEntry> {

@@ -1,13 +1,17 @@
 use std::{collections::VecDeque, ops::Range};
 
-use crate::{page_replacer::{PageReplacer, PageEvent}, page_loader::PageLoader, page_table::PageTable};
+use crate::{
+    page_loader::PageLoader,
+    page_replacer::{PageEvent, PageReplacer},
+    page_table::PageTable,
+};
 
 pub struct Mmu<
     const MEM_SIZE: usize,
     const FRAME_COUNT: usize,
     const PAGE_COUNT: usize,
     REPLACER: PageReplacer,
-    LOADER: PageLoader
+    LOADER: PageLoader,
 > {
     memory: [u8; MEM_SIZE],
     free_frames: VecDeque<usize>,
@@ -16,7 +20,14 @@ pub struct Mmu<
     loader: LOADER,
 }
 
-impl<const MEM_SIZE: usize, const FRAME_COUNT: usize, const PAGE_COUNT: usize, REPLACER, LOADER> Mmu<MEM_SIZE, FRAME_COUNT, PAGE_COUNT, REPLACER, LOADER> where
+impl<
+        const MEM_SIZE: usize,
+        const FRAME_COUNT: usize,
+        const PAGE_COUNT: usize,
+        REPLACER,
+        LOADER,
+    > Mmu<MEM_SIZE, FRAME_COUNT, PAGE_COUNT, REPLACER, LOADER>
+where
     REPLACER: PageReplacer,
     LOADER: PageLoader,
 {
@@ -50,7 +61,10 @@ impl<const MEM_SIZE: usize, const FRAME_COUNT: usize, const PAGE_COUNT: usize, R
                 let evicted_page = self.page_table.get(evicted_page_idx).unwrap();
 
                 if evicted_page.dirty {
-                    println!("mmu: página {:#06X} suja, salvando antes de sobrescrever", evicted_page_idx);
+                    println!(
+                        "mmu: página {:#06X} suja, salvando antes de sobrescrever",
+                        evicted_page_idx
+                    );
 
                     let frame_range = Self::frame_idx_to_range(evicted_page.frame_index);
                     let frame = &self.memory[frame_range];
@@ -59,7 +73,7 @@ impl<const MEM_SIZE: usize, const FRAME_COUNT: usize, const PAGE_COUNT: usize, R
                 }
 
                 evicted_page.frame_index
-            },
+            }
         };
 
         self.page_table.set(page_number, frame_idx);
@@ -79,28 +93,36 @@ impl<const MEM_SIZE: usize, const FRAME_COUNT: usize, const PAGE_COUNT: usize, R
         let address = address & 0xFFFF; // trunca o endereco para 16 bits
 
         let page_number = (address & 0xFF00) >> 8; // top 8 bits
-        let page_offset = address & 0x00FF;        // bottom 8 bits
+        let page_offset = address & 0x00FF; // bottom 8 bits
 
-        println!("mmu: acesso addr {:#06X} page_num={:#02X} page_offset={:#02X}", address, page_number, page_offset);
+        println!(
+            "mmu: acesso addr {:#06X} page_num={:#02X} page_offset={:#02X}",
+            address, page_number, page_offset
+        );
 
         let frame_idx = match self.page_table.get(page_number) {
             Some(entry) => {
                 println!("mmu: page hit");
                 entry.frame_index
-            },
+            }
             None => {
                 println!("mmu: page fault! tratando...");
                 self.handle_page_fault(page_number)
-            },
+            }
         };
 
-        if mark_dirty { self.page_table.mark_dirty(page_number); }
+        if mark_dirty {
+            self.page_table.mark_dirty(page_number);
+        }
 
         self.replacer.page_event(PageEvent::Touched(page_number));
 
         let frame_range = Self::frame_idx_to_range(frame_idx);
 
-        println!("mmu: página {:#02X} mapeada para frame físico idx={:#02X} [{:#02X}; {:#02X})", page_number, frame_idx, &frame_range.start, &frame_range.end);
+        println!(
+            "mmu: página {:#02X} mapeada para frame físico idx={:#02X} [{:#02X}; {:#02X})",
+            page_number, frame_idx, &frame_range.start, &frame_range.end
+        );
 
         (frame_range, page_offset)
     }

@@ -2,7 +2,11 @@
 //!
 //! A estrutura do arquivo é a seguinte:
 
-use std::{fs::File, io::{Read, Seek, SeekFrom, Write}, path::{PathBuf, Path}};
+use std::{
+    fs::File,
+    io::{Read, Seek, SeekFrom, Write},
+    path::{Path, PathBuf},
+};
 
 use vm::page_loader::PageLoader;
 
@@ -62,7 +66,11 @@ impl<const N_PAGES: usize> SwapFilePageLoader<N_PAGES> {
 
         file.read(&mut page_data[..])?;
 
-        let loader = SwapFilePageLoader { file, header, page_data };
+        let loader = SwapFilePageLoader {
+            file,
+            header,
+            page_data,
+        };
 
         //println!("{:?}", loader);
 
@@ -88,7 +96,9 @@ impl<const N_PAGES: usize> PageLoader for SwapFilePageLoader<N_PAGES> {
         let starting_idx = std::mem::size_of::<SwapFileHeader<N_PAGES>>();
         let offset = (self.header.indices[page_number] - 1) * self.header.page_size;
 
-        self.file.seek(SeekFrom::Start((starting_idx + offset).try_into().unwrap())).unwrap();
+        self.file
+            .seek(SeekFrom::Start((starting_idx + offset).try_into().unwrap()))
+            .unwrap();
 
         self.file.read(target).unwrap();
     }
@@ -106,7 +116,11 @@ impl<const N_PAGES: usize> PageLoader for SwapFilePageLoader<N_PAGES> {
 
             let new_idx = cur_idx + 1;
 
-            println!("write {:?} at {}", buffer, self.file.stream_position().unwrap());
+            println!(
+                "write {:?} at {}",
+                buffer,
+                self.file.stream_position().unwrap()
+            );
             self.file.write(buffer).unwrap();
 
             self.header.indices[page_number] = new_idx;
@@ -115,7 +129,9 @@ impl<const N_PAGES: usize> PageLoader for SwapFilePageLoader<N_PAGES> {
 
             let indices_offset = (2 * sz) + (page_number * sz);
 
-            self.file.seek(SeekFrom::Start(indices_offset.try_into().unwrap())).unwrap();
+            self.file
+                .seek(SeekFrom::Start(indices_offset.try_into().unwrap()))
+                .unwrap();
             let bytes = new_idx.to_le_bytes();
 
             println!("write {:?} at {}", bytes, indices_offset);
@@ -124,7 +140,9 @@ impl<const N_PAGES: usize> PageLoader for SwapFilePageLoader<N_PAGES> {
             let starting_idx = std::mem::size_of::<SwapFileHeader<N_PAGES>>();
             let offset = (self.header.indices[page_number] - 1) * self.header.page_size;
 
-            self.file.seek(SeekFrom::Start((starting_idx + offset).try_into().unwrap())).unwrap();
+            self.file
+                .seek(SeekFrom::Start((starting_idx + offset).try_into().unwrap()))
+                .unwrap();
 
             println!("write {:?} at {}", buffer, starting_idx + offset);
 
