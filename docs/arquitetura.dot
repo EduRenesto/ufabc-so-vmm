@@ -1,0 +1,43 @@
+digraph {
+    node [shape = "rect"];
+
+    subgraph cluster_mmu {
+        label = "Mmu";
+
+        read [label = "read(addr) -> byte"];
+        write [label = "write(addr, byte)"];
+
+        translate_addr [label = "translate_addr(addr) -> frame"];
+
+        handle_page_fault [label = "handle_page_fault(page_number)"];
+
+        read -> translate_addr;
+        write -> translate_addr;
+    }
+
+    subgraph cluster_page_table {
+        label = "PageTable";
+
+        ptable_get [label = "get(page_number) -> frame_idx"];
+        ptable_set [label = "set(page_number, frame_idx)"];
+    }
+
+    translate_addr -> ptable_get;
+    ptable_get -> handle_page_fault;
+
+    subgraph cluster_page_loader {
+        label = "PageLoader";
+
+        load_page_into [label = "load_page_into(page_number, frame)"];
+    };
+
+    subgraph cluster_page_replacer {
+        label = "PageReplacer";
+
+        pick_replacement_page [label = "pick_replacement_page() -> page_number"];
+    };
+
+    handle_page_fault -> pick_replacement_page;
+    pick_replacement_page -> load_page_into;
+    load_page_into -> ptable_set;
+}

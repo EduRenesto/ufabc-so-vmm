@@ -1,3 +1,32 @@
+//! Ponto de entrada da aplicação demo do projeto.
+//!
+//! Toda a implementação interessante do projeto foi feita nos módulos
+//! na crate `vm` -- por favor, visite os arquivos e leia os comentários!
+//!
+//! Este arquivo apenas contém o código de instanciamento da estrutura da Mmu
+//! e o handling da entrada padrão.
+//!
+//! ## Entrada
+//!
+//! Este programa espera uma entrada linha-a-linha, onde cada linha é um
+//! comando dos seguintes:
+//!
+//! - `r <address>`: lê o byte no endereço `<address>` e apresenta na stdout;
+//! - `w <address> <byte>`: escreve o byte `<byte>` em `<address>`;
+//!
+//! Note que todos os valores *são em hexadecimal*. Outros valores causarão um
+//! panic na aplicação.
+//!
+//! ### Exemplo
+//!
+//! ```
+//! r 0xCAFE
+//! w 0xCAFE 0xA
+//! w 0xCAFF 0xB
+//! r 0xBABE
+//! w 0xDEAD 0x1
+//! ```
+
 mod file_page_loader;
 
 use std::io::BufRead;
@@ -22,10 +51,18 @@ impl PageLoader for StubPageLoader {
 }
 
 fn main() {
+    env_logger::init();
+
     let swapfile = file_page_loader::SwapFilePageLoader::<256>::new(&"./swapfile.bin").unwrap();
 
-    //let mut mmu = Mmu::<65536, 256, _, _>::new(FIFOPageReplacer::new(), StubPageLoader);
-    let mut mmu = Mmu::<512, 2, 256, _, _>::new(FIFOPageReplacer::new(), swapfile);
+    // Cria uma MMU com:
+    // - 65536 bytes (64kb) de memória...;
+    // - ...divididos em 256 frames...;
+    // - ...populados por 256 páginas.
+    let mut mmu = Mmu::<65536, 256, 256, _, _>::new(FIFOPageReplacer::new(), swapfile);
+
+    // Utilize essa construção para modificar o arquivo swap (veja README.md)
+    //let mut mmu = Mmu::<256, 1, 256, _, _>::new(FIFOPageReplacer::new(), swapfile);
 
     let mut stdin = std::io::stdin().lock();
     let mut line = String::new();
