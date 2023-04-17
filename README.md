@@ -55,6 +55,14 @@ descrito no arquivo `project-demo/src/main.rs` nos comentários do módulo. Um
 arquivo de exemplo de entrada pode ser encontrado na raiz do projeto em
 `sample.in`, o qual pode ser usado com `cargo run < sample.in`.
 
+Na execução normal, o programa não apresentará nenhum log específico. Para
+habilitar logging, que irá mostrar os passos feitos pela MMU, basta executar o
+programa com a variável de ambiente `RUST_LOG=debug`. Exemplo:
+
+```
+$ RUST_LOG=debug cargo run < sample.in
+```
+
 ## Swapfile
 
 O projeto lê as páginas de um arquivo binário (descrito em
