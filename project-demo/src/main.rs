@@ -1,5 +1,7 @@
 mod file_page_loader;
 
+use std::io::BufRead;
+
 use vm::{mmu::Mmu, page_loader::PageLoader, page_replacer::FIFOPageReplacer};
 
 struct StubPageLoader;
@@ -25,14 +27,40 @@ fn main() {
     //let mut mmu = Mmu::<65536, 256, _, _>::new(FIFOPageReplacer::new(), StubPageLoader);
     let mut mmu = Mmu::<512, 2, 256, _, _>::new(FIFOPageReplacer::new(), swapfile);
 
-    dbg!(mmu.read(0xCAFE));
-    dbg!(mmu.write(0xCAFE, 0xD));
-    //dbg!(mmu.read(0xCAFF));
-    dbg!(mmu.read(0xBEEF));
-    dbg!(mmu.write(0xBEEF, 0x2));
-    //dbg!(mmu.read(0xBEEF));
-    dbg!(mmu.read(0xDEAD));
-    dbg!(mmu.write(0xDEAD, 0x3));
+    let mut stdin = std::io::stdin().lock();
+    let mut line = String::new();
 
-    dbg!(mmu.read(0xCAFE));
+    while let Ok(_) = stdin.read_line(&mut line) {
+        let mut tokens = line.split(" ");
+
+        let cmd = tokens.next().unwrap_or("INVALID");
+
+        match cmd {
+            "r" => {
+                let address = tokens.next().unwrap().trim();
+                let address = usize::from_str_radix(&address[2..], 16).unwrap();
+
+                let value = mmu.read(address);
+
+                println!("{:#06X} => {:#X}", address, value);
+            }
+            "w" => {
+                let address = tokens.next().unwrap().trim();
+                let address = usize::from_str_radix(&address[2..], 16).unwrap();
+
+                let value = tokens.next().unwrap().trim();
+                let value = u8::from_str_radix(&value[2..], 16).unwrap();
+
+                mmu.write(address, value);
+            }
+            "" => {
+                break;
+            }
+            _ => {
+                println!("comando inválido: {}", cmd);
+            }
+        }
+
+        line.clear();
+    }
 }
