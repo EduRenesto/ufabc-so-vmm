@@ -1,11 +1,7 @@
-//! FilePageLoader - struct que carrega/escreve a memória baseada em um arquivo.
-//!
-//! A estrutura do arquivo é a seguinte:
-
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use vm::page_loader::PageLoader;
@@ -22,7 +18,6 @@ struct SwapFileHeader<const N_PAGES: usize> {
 pub struct SwapFilePageLoader<const N_PAGES: usize> {
     file: File,
     header: SwapFileHeader<N_PAGES>,
-    page_data: Vec<u8>,
 }
 
 impl<const N_PAGES: usize> SwapFilePageLoader<N_PAGES> {
@@ -62,15 +57,7 @@ impl<const N_PAGES: usize> SwapFilePageLoader<N_PAGES> {
 
         let header = SwapFilePageLoader::parse_header(&mut file)?;
 
-        let mut page_data = vec![0u8; header.n_pages * header.page_size];
-
-        file.read(&mut page_data[..])?;
-
-        let loader = SwapFilePageLoader {
-            file,
-            header,
-            page_data,
-        };
+        let loader = SwapFilePageLoader { file, header };
 
         //println!("{:?}", loader);
 
@@ -80,7 +67,6 @@ impl<const N_PAGES: usize> SwapFilePageLoader<N_PAGES> {
 
 impl<const N_PAGES: usize> PageLoader for SwapFilePageLoader<N_PAGES> {
     fn load_page_into(&mut self, page_number: usize, target: &mut [u8]) {
-        println!("load_page_into({:#016X}, {:?})", page_number, target);
         if self.header.indices[page_number] == 0 {
             // 0 significa que a página nao esta presente. No mundo real
             // isso iria causar violação de acesso + crash, mas aqui
@@ -104,7 +90,6 @@ impl<const N_PAGES: usize> PageLoader for SwapFilePageLoader<N_PAGES> {
     }
 
     fn flush_page(&mut self, page_number: usize, buffer: &[u8]) {
-        println!("flush_page({:#016X}, {:?})", page_number, buffer);
         if self.header.indices[page_number] == 0 {
             let offset = std::mem::size_of::<SwapFileHeader<N_PAGES>>();
             self.file.seek(SeekFrom::End(0)).unwrap();
@@ -116,11 +101,6 @@ impl<const N_PAGES: usize> PageLoader for SwapFilePageLoader<N_PAGES> {
 
             let new_idx = cur_idx + 1;
 
-            println!(
-                "write {:?} at {}",
-                buffer,
-                self.file.stream_position().unwrap()
-            );
             self.file.write(buffer).unwrap();
 
             self.header.indices[page_number] = new_idx;
@@ -134,7 +114,6 @@ impl<const N_PAGES: usize> PageLoader for SwapFilePageLoader<N_PAGES> {
                 .unwrap();
             let bytes = new_idx.to_le_bytes();
 
-            println!("write {:?} at {}", bytes, indices_offset);
             self.file.write(&bytes).unwrap();
         } else {
             let starting_idx = std::mem::size_of::<SwapFileHeader<N_PAGES>>();
@@ -143,8 +122,6 @@ impl<const N_PAGES: usize> PageLoader for SwapFilePageLoader<N_PAGES> {
             self.file
                 .seek(SeekFrom::Start((starting_idx + offset).try_into().unwrap()))
                 .unwrap();
-
-            println!("write {:?} at {}", buffer, starting_idx + offset);
 
             self.file.write(buffer).unwrap();
         }

@@ -63,4 +63,6 @@ fn main() {
 
         line.clear();
     }
+
+    mmu.stats.print_stats();
 }

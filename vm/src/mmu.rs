@@ -1,10 +1,38 @@
 use std::{collections::VecDeque, ops::Range};
 
+use log::{debug, info};
+
 use crate::{
     page_loader::PageLoader,
     page_replacer::{PageEvent, PageReplacer},
     page_table::PageTable,
 };
+
+#[derive(Default)]
+pub struct MmuStats {
+    hits: usize,
+    misses: usize,
+}
+
+impl MmuStats {
+    pub fn print_stats(&self) {
+        let total = self.hits + self.misses;
+        let miss_rate = self.misses as f32 / total as f32;
+
+        println!("===== Estatísticas da MMU =====");
+        println!("Total de acessos: {}", total);
+        println!(
+            "  Misses: {:>6} ({:>6.2} %)",
+            self.misses,
+            miss_rate * 100.0
+        );
+        println!(
+            "  Hits:   {:>6} ({:>6.2} %)",
+            self.hits,
+            (1.0 - miss_rate) * 100.0
+        );
+    }
+}
 
 pub struct Mmu<
     const MEM_SIZE: usize,
@@ -18,6 +46,7 @@ pub struct Mmu<
     page_table: PageTable<PAGE_COUNT>,
     replacer: REPLACER,
     loader: LOADER,
+    pub stats: MmuStats,
 }
 
 impl<
@@ -40,6 +69,7 @@ where
             page_table: PageTable::new(),
             replacer,
             loader,
+            stats: MmuStats::default(),
         }
     }
 
@@ -61,7 +91,7 @@ where
                 let evicted_page = self.page_table.get(evicted_page_idx).unwrap();
 
                 if evicted_page.dirty {
-                    println!(
+                    debug!(
                         "mmu: página {:#06X} suja, salvando antes de sobrescrever",
                         evicted_page_idx
                     );
@@ -95,18 +125,20 @@ where
         let page_number = (address & 0xFF00) >> 8; // top 8 bits
         let page_offset = address & 0x00FF; // bottom 8 bits
 
-        println!(
+        info!(
             "mmu: acesso addr {:#06X} page_num={:#02X} page_offset={:#02X}",
             address, page_number, page_offset
         );
 
         let frame_idx = match self.page_table.get(page_number) {
             Some(entry) => {
-                println!("mmu: page hit");
+                debug!("mmu: page hit");
+                self.stats.hits += 1;
                 entry.frame_index
             }
             None => {
-                println!("mmu: page fault! tratando...");
+                debug!("mmu: page fault! tratando...");
+                self.stats.misses += 1;
                 self.handle_page_fault(page_number)
             }
         };
@@ -119,7 +151,7 @@ where
 
         let frame_range = Self::frame_idx_to_range(frame_idx);
 
-        println!(
+        debug!(
             "mmu: página {:#02X} mapeada para frame físico idx={:#02X} [{:#02X}; {:#02X})",
             page_number, frame_idx, &frame_range.start, &frame_range.end
         );
